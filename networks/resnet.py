@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
@@ -193,7 +194,8 @@ def resnet50(pretrained=False, **kwargs):
         print('Initialize with pre-trained ResNet')
         from collections import OrderedDict
         state_dict = model.state_dict()
-        pretrained_state_dict = model_zoo.load_url(model_urls['resnet50'])
+        #pretrained_state_dict = model_zoo.load_url(model_urls['resnet50'])
+        pretrained_state_dict = torch.load('/home/dx/pytorch-cpn/resnet50-19c8e357.pth')
         for k, v in pretrained_state_dict.items():
             if k not in state_dict:
                 continue

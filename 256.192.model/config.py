@@ -41,6 +41,7 @@ class Config:
     gk7 = (7, 7)
 
     gt_path = os.path.join(root_dir, 'data', 'COCO2017', 'annotations', 'COCO_2017_train.json')
+    #gt_path = "/home/dx/pytorch-cpn/data/COCO2017/annotations/person_keypoints_train2017.json"
 
 cfg = Config()
 add_pypath(cfg.root_dir)
