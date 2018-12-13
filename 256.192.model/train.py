@@ -10,20 +10,20 @@ import torch.optim
 import torchvision.datasets as datasets
 
 from config import cfg
-from utils.logger import Logger
 from utils.evaluation import accuracy, AverageMeter, final_preds
 from utils.misc import save_model, adjust_learning_rate
 from utils.osutils import mkdir_p, isfile, isdir, join
 from utils.transforms import fliplr, flip_back
 from networks import network 
 from dataloader.mscocoMulti import MscocoMulti
-
-
+from utils.logger import create_logger
+import logging
 def main(args):
     # create checkpoint dir
     if not isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
 
+    logger = create_logger(cfg.cur_dir+'/checkpoint')
     # create model
     model = network.__dict__[cfg.model](cfg.output_shape, cfg.num_class, pretrained = True)
     model = torch.nn.DataParallel(model).cuda()
@@ -37,23 +37,22 @@ def main(args):
     
     if args.resume:
         if isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
+            logger.info("=> loading checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
             pretrained_dict = checkpoint['state_dict']
             model.load_state_dict(pretrained_dict)
             args.start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
-            print("=> loaded checkpoint '{}' (epoch {})"
+            logger.info("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
-            logger = Logger(join(args.checkpoint, 'log.txt'), resume=True)
+            #logger = Logger(join(args.checkpoint, 'log.txt'), resume=True)
         else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
+            logger.info("=> no checkpoint found at '{}'".format(args.resume))
     else:        
-        logger = Logger(join(args.checkpoint, 'log.txt'))
-        logger.set_names(['Epoch', 'LR', 'Train Loss'])
+        logger.info('Train without pre-trained model')
 
     cudnn.benchmark = True
-    print('    Total params: %.2fMB' % (sum(p.numel() for p in model.parameters())/(1024*1024)*4))
+    logger.info('Total params: %.2fMB' % (sum(p.numel() for p in model.parameters())/(1024*1024)*4))
 
     train_loader = torch.utils.data.DataLoader(
         MscocoMulti(cfg),
@@ -62,14 +61,11 @@ def main(args):
 
     for epoch in range(args.start_epoch, args.epochs):
         lr = adjust_learning_rate(optimizer, epoch, cfg.lr_dec_epoch, cfg.lr_gamma)
-        print('\nEpoch: %d | LR: %.8f' % (epoch + 1, lr)) 
-
         # train for one epoch
-        train_loss = train(train_loader, model, [criterion1, criterion2], optimizer)
-        print('train_loss: ',train_loss)
+        train_loss = train(train_loader, model, [criterion1, criterion2], optimizer,epoch)
 
         # append logger file
-        logger.append([epoch + 1, lr, train_loss])
+        #logger.append([epoch + 1, lr, train_loss])
 
         save_model({
             'epoch': epoch + 1,
@@ -81,7 +77,7 @@ def main(args):
 
 
 
-def train(train_loader, model, criterions, optimizer):
+def train(train_loader, model, criterions, optimizer,epoch):
     # prepare for refine loss
     def ohkm(loss, top_k):
         ohkm_loss = 0.
@@ -100,10 +96,13 @@ def train(train_loader, model, criterions, optimizer):
 
     # switch to train mode
     model.train()
-
+    logger = logging.getLogger(__name__)
+    end = time.time()
     for i, (inputs, targets, valid, meta) in enumerate(train_loader):     
-        input_var = torch.autograd.Variable(inputs.cuda())
+        data_time.update(time.time() - end)
 
+        input_var = torch.autograd.Variable(inputs.cuda())
+            
         target15, target11, target9, target7 = targets
         refine_target_var = torch.autograd.Variable(target7.cuda(async=True))
         valid_var = torch.autograd.Variable(valid.cuda(async=True))
@@ -137,10 +136,20 @@ def train(train_loader, model, criterions, optimizer):
         loss.backward()
         optimizer.step()
 
+        batch_time.update(time.time() - end)
+        #if(i%100==0 and i!=0):
+        #    print('iteration {} | loss: {}, global loss: {}, refine loss: {}, avg loss: {}'
+        #        .format(i, loss.data.item(), global_loss_record, 
+        #           refine_loss_record, losses.avg)) 
         if(i%100==0 and i!=0):
-            print('iteration {} | loss: {}, global loss: {}, refine loss: {}, avg loss: {}'
-                .format(i, loss.data.item(), global_loss_record, 
-                    refine_loss_record, losses.avg)) 
+            msg = 'Epoch: [{0}][{1}/{2}]\t' \
+                'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
+                'Speed {speed:.1f} samples/s\t' \
+                'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
+                'Loss:{loss:3f} global loss:{global_loss:.3f}  refine loss:{refine_loss:.3f} avg loss{losses.avg:.3f}'.format(
+                    epoch, i, len(train_loader),batch_time=batch_time,speed=inputs.size(0)/batch_time.val,data_time=data_time,
+                    loss = loss.data.item(),global_loss = global_loss_record,refine_loss = refine_loss_record,losses = losses)
+            logger.info(msg)
 
     return losses.avg
 

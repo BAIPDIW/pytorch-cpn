@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
-
-
+import logging
+logger = logging.getLogger(__name__)
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
 
@@ -191,7 +191,7 @@ def resnet50(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        print('Initialize with pre-trained ResNet')
+        logger.info('Initialize with pre-trained ResNet')
         from collections import OrderedDict
         state_dict = model.state_dict()
         #pretrained_state_dict = model_zoo.load_url(model_urls['resnet50'])
@@ -200,7 +200,7 @@ def resnet50(pretrained=False, **kwargs):
             if k not in state_dict:
                 continue
             state_dict[k] = v
-        print('successfully load '+str(len(state_dict.keys()))+' keys')
+        logger.info('successfully load '+str(len(state_dict.keys()))+' keys')
         model.load_state_dict(state_dict)
     return model
 
