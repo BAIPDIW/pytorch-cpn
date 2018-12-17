@@ -73,7 +73,6 @@ def main(args):
             'optimizer' : optimizer.state_dict(),
         }, checkpoint=args.checkpoint)
 
-    logger.close()
 
 
 
