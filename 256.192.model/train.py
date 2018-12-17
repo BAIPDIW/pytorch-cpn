@@ -73,8 +73,6 @@ def main(args):
             'optimizer' : optimizer.state_dict(),
         }, checkpoint=args.checkpoint)
 
-    logger.close()
-
 
 
 def train(train_loader, model, criterions, optimizer,epoch):
