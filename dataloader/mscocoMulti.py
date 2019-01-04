@@ -4,8 +4,8 @@ import json
 import random
 import math
 import cv2
-#import skimage
-#import skimage.transform
+import skimage
+import skimage.transform
 
 import torch
 import torch.utils.data as data
@@ -97,10 +97,10 @@ class MscocoMulti(data.Dataset):
         
         halfl_w = min(width - center[0], (width - center[0]) / 1.25 * affrat)
         halfl_h = min(height - center[1], (height - center[1]) / 1.25 * affrat)
-        #img = skimage.transform.resize(img[int(center[1] - halfl_h): int(center[1] + halfl_h + 1),
-        #                     int(center[0] - halfl_w): int(center[0] + halfl_w + 1)], (height, width))
-        cv2.resize(img[int(center[1] - halfl_h): int(center[1] + halfl_h + 1),
-                                 int(center[0] - halfl_w): int(center[0] + halfl_w + 1)], (height, width))
+        img = skimage.transform.resize(img[int(center[1] - halfl_h): int(center[1] + halfl_h + 1),
+                             int(center[0] - halfl_w): int(center[0] + halfl_w + 1)], (height, width),mode='constant',anti_aliasing=False)
+        #cv2.resize(img[int(center[1] - halfl_h): int(center[1] + halfl_h + 1),
+        #                         int(center[0] - halfl_w): int(center[0] + halfl_w + 1)], (height, width))
         for i in range(n):
             label[i][0] = (label[i][0] - center[0]) / halfl_w * (width - center[0]) + center[0]
             label[i][1] = (label[i][1] - center[1]) / halfl_h * (height - center[1]) + center[1]
@@ -159,9 +159,9 @@ class MscocoMulti(data.Dataset):
             points = np.array(a['unit']['keypoints']).reshape(self.num_class, 3).astype(np.float32)
         gt_bbox = a['unit']['GT_bbox']
 
-        #image = scipy.misc.imread(img_path, mode='RGB')
-        image = cv2.imread(img_path,cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
-        image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
+        image = scipy.misc.imread(img_path, mode='RGB')
+        #image = cv2.imread(img_path,cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+        #image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
 
         if image is None:
             logger.info('=> fail to read {}'.format(img_path))

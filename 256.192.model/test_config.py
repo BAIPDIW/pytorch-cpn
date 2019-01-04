@@ -30,7 +30,7 @@ class Config:
         # if False, make sure you have downloaded the val_dets.json and place it into annotation folder
         gt_path = os.path.join(root_dir, 'data', 'COCO2017', 'annotations', 'val_dets.json')
     ori_gt_path = os.path.join(root_dir, 'data', 'COCO2017', 'annotations', 'person_keypoints_val2017.json')
-
+    batch_size = 128
 cfg = Config()
 add_pypath(cfg.root_dir)
 add_pypath(os.path.join(cfg.root_dir, 'cocoapi/PythonAPI'))

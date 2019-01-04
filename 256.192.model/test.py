@@ -25,8 +25,22 @@ from utils.imutils import im_to_numpy, im_to_torch
 from networks import network 
 from dataloader.mscocoMulti import MscocoMulti
 from tqdm import tqdm
-
+from collections import OrderedDict
 def main(args):
+    def _print_name_value(name_value):
+        names = name_value.keys()
+        values = name_value.values()
+        num_values = len(name_value)
+        print(
+            ' '.join(['| {}'.format(name) for name in names]) +
+            ' |'
+        )
+        print('|---' * (num_values+1) + '|')
+        print(
+            ' ' +
+            ' '.join(['| {:.3f}'.format(value) for value in values]) +
+            ' |'
+        )
     # create model
     model = network.__dict__[cfg.model](cfg.output_shape, cfg.num_class, pretrained = False)
     model = torch.nn.DataParallel(model).cuda()
@@ -138,7 +152,18 @@ def main(args):
     cocoEval = COCOeval(eval_gt, eval_dt, iouType='keypoints')
     cocoEval.evaluate()
     cocoEval.accumulate()
-    cocoEval.summarize()    
+    cocoEval.summarize()
+
+    stats_names = ['AP', 'Ap .5', 'AP .75', 'AP (M)', 'AP (L)', 'AR', 'AR .5', 'AR .75', 'AR (M)', 'AR (L)']
+    info_str = []
+    for ind, name in enumerate(stats_names):
+        info_str.append((name, cocoEval.stats[ind]))
+    name_values = OrderedDict(info_str)
+    if isinstance(name_values, list):
+        for name_value in name_values:
+            _print_name_value(name_value)
+    else:
+        _print_name_value(name_values)    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch CPN Test')
