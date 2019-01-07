@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 from .globalNet import globalNet
 from .refineNet import refineNet
+from .coarseNet import coarseNet
 
 __all__ = ['CPN50', 'CPN101']
 
@@ -12,14 +13,16 @@ class CPN(nn.Module):
         channel_settings = [2048, 1024, 512, 256]
         self.resnet = resnet
         self.global_net = globalNet(channel_settings, output_shape, num_class)
+        self.coarse_net = coarseNet(channel_settings, output_shape, num_class)
         self.refine_net = refineNet(channel_settings[-1], output_shape, num_class)
 
     def forward(self, x):
         res_out = self.resnet(x)
         global_fms, global_outs = self.global_net(res_out)
-        refine_out = self.refine_net(global_fms)
+        coarse_fms, coarse_outs = self.coarse_net(global_fms)
+        refine_outs = self.refine_net(coarse_fms)
 
-        return global_outs, refine_out
+        return global_outs, coarse_outs,refine_outs
 
 def CPN50(out_size,num_class,pretrained=True):
     res50 = resnet50(pretrained=pretrained)

@@ -101,7 +101,7 @@ def train(train_loader, model, criterions, optimizer,epoch):
             ohkm_loss += torch.sum(tmp_loss) / top_k
         ohkm_loss /= loss.size()[0]
         return ohkm_loss
-    criterion1, criterion2 = criterions
+    criterion1, criterion2,criterion3 = criterions
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -121,12 +121,13 @@ def train(train_loader, model, criterions, optimizer,epoch):
         valid_var = torch.autograd.Variable(valid.cuda(async=True))
 
         # compute output
-        global_outputs, refine_output = model(input_var)
+        global_outputs, coarse_outputs,refine_output = model(input_var)
         score_map = refine_output.data.cpu()
 
         loss = 0.
         global_loss_record = 0.
         refine_loss_record = 0.
+        coarse_loss_record = 0.
         # comput global loss and refine loss
         for global_output, label in zip(global_outputs, targets):
             num_points = global_output.size()[1]
@@ -134,6 +135,13 @@ def train(train_loader, model, criterions, optimizer,epoch):
             global_loss = criterion1(global_output, torch.autograd.Variable(global_label.cuda(async=True))) / 2.0
             loss += global_loss
             global_loss_record += global_loss.data.item()
+        for coarse_output, label in zip(coarse_outputs, targets):
+            num_points = coarse_output.size()[1]
+            coarse_label = label * (valid > 1.1).type(torch.FloatTensor).view(-1, num_points, 1, 1)
+            coarse_loss = criterion1(global_output, torch.autograd.Variable(global_label.cuda(async=True))) / 2.0
+            loss += coarse_loss
+            coarse_loss_record += coarse_loss.data.item()
+
         refine_loss = criterion2(refine_output, refine_target_var)
         refine_loss = refine_loss.mean(dim=3).mean(dim=2)
         refine_loss *= (valid_var > 0.1).type(torch.cuda.FloatTensor)
@@ -160,9 +168,9 @@ def train(train_loader, model, criterions, optimizer,epoch):
                 'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
                 'Speed {speed:.1f} samples/s\t' \
                 'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
-                'Loss:{loss:3f} global loss:{global_loss:.3f}  refine loss:{refine_loss:.3f} avg loss{losses.avg:.3f}'.format(
+                'loss:{loss:.3f} g_loss:{global_loss:.3f}  c_loss:{coarse_loss:.3f} refine loss:{refine_loss:.3f} avg loss{losses.avg:.3f}'.format(
                     epoch, i, len(train_loader),batch_time=batch_time,speed=inputs.size(0)/batch_time.val,data_time=data_time,
-                    loss = loss.data.item(),global_loss = global_loss_record,refine_loss = refine_loss_record,losses = losses)
+                    loss = loss.data.item(),global_loss = global_loss_record,coarse_loss = coarse_loss,refine_loss = refine_loss_record,losses = losses)
             logger.info(msg)
 
 def test(test_loader,model,flip,result):
