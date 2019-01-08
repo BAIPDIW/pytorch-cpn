@@ -51,9 +51,9 @@ class coarseNet(nn.Module):
         cascade = []
         num_cascade = 4
         for i in range(num_cascade):
-            cascade.append(self._make_layer(channel_settings[i], num_cascade-i-1, out_shape))
+            cascade.append(self._make_layer(256, num_cascade-i-1, out_shape))
         self.cascade = nn.ModuleList(cascade)
-        self.final_predict = self._predict(4*channel_settings[num_cascade-1], num_class)
+        self.final_predict = self._predict(4*256, num_class)
 
     def _make_layer(self, input_channel, num, output_shape):
         layers = []

@@ -101,7 +101,7 @@ def train(train_loader, model, criterions, optimizer,epoch):
             ohkm_loss += torch.sum(tmp_loss) / top_k
         ohkm_loss /= loss.size()[0]
         return ohkm_loss
-    criterion1, criterion2,criterion3 = criterions
+    criterion1, criterion2 = criterions
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -135,12 +135,13 @@ def train(train_loader, model, criterions, optimizer,epoch):
             global_loss = criterion1(global_output, torch.autograd.Variable(global_label.cuda(async=True))) / 2.0
             loss += global_loss
             global_loss_record += global_loss.data.item()
-        for coarse_output, label in zip(coarse_outputs, targets):
-            num_points = coarse_output.size()[1]
-            coarse_label = label * (valid > 1.1).type(torch.FloatTensor).view(-1, num_points, 1, 1)
-            coarse_loss = criterion1(global_output, torch.autograd.Variable(global_label.cuda(async=True))) / 2.0
-            loss += coarse_loss
-            coarse_loss_record += coarse_loss.data.item()
+        
+        coarse_loss = criterion2(coarse_outputs,refine_target_var)
+        coarse_loss = coarse_loss.mean(dim=3).mean(dim=2)
+        coarse_loss *= (valid_var >0.1).type(torch.cuda.FloatTensor)
+        coarse_loss = ohkm(coarse_loss, 10)
+        loss += coarse_loss
+        coarse_loss_record = coarse_loss.data.item()
 
         refine_loss = criterion2(refine_output, refine_target_var)
         refine_loss = refine_loss.mean(dim=3).mean(dim=2)
@@ -206,12 +207,12 @@ def test(test_loader,model,flip,result):
                 flip_input_var = torch.autograd.Variable(flip_inputs.cuda())
 
             # compute output
-            global_outputs, refine_output = model(input_var)
+            global_outputs,coarse_outputs, refine_output = model(input_var)
             score_map = refine_output.data.cpu()
             score_map = score_map.numpy()
 
             if flip == True:
-                flip_global_outputs, flip_output = model(flip_input_var)
+                flip_global_outputs,flip_coarse_outputs, flip_output = model(flip_input_var)
                 flip_score_map = flip_output.data.cpu()
                 flip_score_map = flip_score_map.numpy()
 
