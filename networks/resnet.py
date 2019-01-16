@@ -3,6 +3,7 @@ import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
 import logging
+from .non_local_dot_product import NONLocalBlock2D
 logger = logging.getLogger(__name__)
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
@@ -108,7 +109,10 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-
+        self.NONLocalBlock2D1 = NONLocalBlock2D(in_channels=256)
+        self.NONLocalBlock2D2 = NONLocalBlock2D(in_channels=512)
+        self.NONLocalBlock2D3 = NONLocalBlock2D(in_channels=1024)
+        self.NONLocalBlock2D4 = NONLocalBlock2D(in_channels=2048)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -144,7 +148,10 @@ class ResNet(nn.Module):
         x2 = self.layer2(x1)
         x3 = self.layer3(x2)
         x4 = self.layer4(x3)
-
+        x1 = self.NONLocalBlock2D1(x1)
+        x2 = self.NONLocalBlock2D2(x2)
+        x3 = self.NONLocalBlock2D3(x3)
+        x4 = self.NONLocalBlock2D4(x4)
         return [x4, x3, x2, x1]
 
 

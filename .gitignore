@@ -108,3 +108,5 @@ ENV/
 # data
 *.jpg
 *.png
+
+/log
