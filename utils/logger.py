@@ -1,8 +1,8 @@
 import logging
 from pathlib import Path
 import time
-def create_logger(log_dir):
-    log_dir = Path(log_dir)
+def create_logger(cfg):
+    log_dir = Path(cfg.cur_dir+'/checkpoint')
     if not log_dir.exists():
         print('=> creating {}'.format(log_dir))
         log_dir.mkdir()
@@ -18,8 +18,9 @@ def create_logger(log_dir):
     logger.setLevel(logging.INFO)
     console = logging.StreamHandler()
     logging.getLogger('').addHandler(console)
-    
-    return logger
+    tensorboard_log_dir = Path(cfg.root_dir+'/log')/(cfg.model+'_'+time_str)
+    tensorboard_log_dir.mkdir(parents=True,exist_ok=True)
+    return logger,str(tensorboard_log_dir)
 
 class Logger(object):
     '''Save training process to log file with simple plot function.'''

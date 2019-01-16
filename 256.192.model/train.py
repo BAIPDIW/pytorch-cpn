@@ -27,15 +27,36 @@ from pycocotools.cocoeval import COCOeval
 import cv2
 from utils.imutils import im_to_numpy, im_to_torch
 from collections import OrderedDict
+import pprint
+from tensorboardX import SummaryWriter
 def main(args):
     # create checkpoint dir
     if not isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
 
-    logger = create_logger(cfg.cur_dir+'/checkpoint')
+    logger,tb_log_dir = create_logger(cfg)
     # create model
     model = network.__dict__[cfg.model](cfg.output_shape, cfg.num_class, pretrained = True)
     model = torch.nn.DataParallel(model).cuda()
+
+    logger.info(pprint.pformat(args))
+    cfg_attr = ['{}:{}'.format(i,getattr(cfg,i)) for i in dir(cfg) if '__' not in i]
+    cfg_a = 'cfg:'
+    for i in cfg_attr:
+        cfg_a = cfg_a+i+'\n\t\t'
+    logger.info(cfg_a)
+    logger.info(model)
+    logger.info('tb_log_dir={}'.format(tb_log_dir))
+    writer_dict = {
+        'writer': SummaryWriter(log_dir=tb_log_dir),
+        'train_global_steps': 0,
+        'valid_global_steps': 0,
+    }
+    dump_input = torch.rand((cfg.batch_size,
+                             3,
+                             cfg.data_shape[0],
+                             cfg.data_shape[1]))
+    #writer_dict['writer'].add_graph(model,(dump_input,),verbose=False)
 
     # define loss function (criterion) and optimizer
     criterion1 = torch.nn.MSELoss().cuda() # for Global loss
@@ -77,20 +98,21 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         lr = adjust_learning_rate(optimizer, epoch, cfg.lr_dec_epoch, cfg.lr_gamma)
         # train for one epoch
-        train(train_loader, model, [criterion1, criterion2], optimizer,epoch)
+        train(train_loader, model, [criterion1, criterion2], optimizer,epoch,writer_dict)
         
         # append logger file
         #logger.append([epoch + 1, lr, train_loss])
-        test(test_loader,model,args.flip,args.result)
+        test(test_loader,model,args.flip,args.result,writer_dict)
         save_model({
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'optimizer' : optimizer.state_dict(),
         }, checkpoint=args.checkpoint)
+    writer_dict['writer'].close()
 
 
 
-def train(train_loader, model, criterions, optimizer,epoch):
+def train(train_loader, model, criterions, optimizer,epoch,writer_dict):
     # prepare for refine loss
     def ohkm(loss, top_k):
         ohkm_loss = 0.
@@ -174,23 +196,38 @@ def train(train_loader, model, criterions, optimizer,epoch):
                     loss = loss.data.item(),global_loss = global_loss_record,coarse_loss = coarse_loss,refine_loss = refine_loss_record,losses = losses)
             logger.info(msg)
 
-def test(test_loader,model,flip,result):
+            writer = writer_dict['writer']
+            global_steps = writer_dict['train_global_steps']
+            writer.add_scalar('train_loss',loss.data.item(),global_steps)
+            writer.add_scalar('global_loss',global_loss_record,global_steps)
+            writer.add_scalar('refine_loss',refine_loss_record,global_steps)
+            writer_dict['train_global_steps'] = global_steps + 1
+    writer_epoch = writer_dict['writer']
+    writer_epoch.add_scalar('train_epoch_average_loss',losses.avg,epoch)
+
+
+def test(test_loader,model,flip,result,writer_dict=None):
     logger = logging.getLogger(__name__)
     # markdown format output
     def _print_name_value(name_value):
         names = name_value.keys()
         values = name_value.values()
         num_values = len(name_value)
-        logger.info(
-            ' '.join(['| {}'.format(name) for name in names]) +
-            ' |'
-        )
-        logger.info('|---' * (num_values+1) + '|')
-        logger.info(
-            ' ' +
-            ' '.join(['| {:.3f}'.format(value) for value in values]) +
-            ' |'
-        )
+
+        logger.info('|------------------------------------------------------------------------------|')
+        indicator = []
+        for value in values:
+            indicator.append(value)
+        logger.info(' Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = {:.3f}'.format(indicator[0]))
+        logger.info(' Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = {:.3f}'.format(indicator[1]))
+        logger.info(' Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = {:.3f}'.format(indicator[2]))
+        logger.info(' Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = {:.3f}'.format(indicator[3]))
+        logger.info(' Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = {:.3f}'.format(indicator[4]))
+        logger.info(' Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = {:.3f}'.format(indicator[5]))
+        logger.info(' Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = {:.3f}'.format(indicator[6]))
+        logger.info(' Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = {:.3f}'.format(indicator[7]))
+        logger.info(' Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = {:.3f}'.format(indicator[8]))
+        logger.info(' Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = {:.3f}'.format(indicator[9]))
 
     model.eval()
     logger.info('testing ......')
@@ -276,7 +313,7 @@ def test(test_loader,model,flip,result):
     result_path = result
     if not isdir(result_path):
         mkdir_p(result_path)
-    result_file = os.path.join(result_path, 'result.json')
+    result_file = os.path.join(result_path, 'keypoint_val2017_results.json')
     with open(result_file,'w') as wf:
         json.dump(full_result, wf)
 
@@ -287,7 +324,7 @@ def test(test_loader,model,flip,result):
     cocoEval.evaluate()
     cocoEval.accumulate()
     cocoEval.summarize()
-    stats_names = ['AP', 'Ap .5', 'AP .75', 'AP (M)', 'AP (L)', 'AR', 'AR .5', 'AR .75', 'AR (M)', 'AR (L)']
+    stats_names = ['AP', 'Ap0.5', 'AP0.75', 'AP_M', 'AP_L', 'AR', 'AR0.5', 'AR0.75', 'AR_M', 'AR_L']
     info_str = []
     for ind, name in enumerate(stats_names):
         info_str.append((name, cocoEval.stats[ind]))
@@ -297,6 +334,18 @@ def test(test_loader,model,flip,result):
             _print_name_value(name_value)
     else:
         _print_name_value(name_values)
+    
+    if writer_dict:
+        writer = writer_dict['writer']
+        valid_global_steps = writer_dict['valid_global_steps']
+        if isinstance(name_values, list):
+            for name_value in name_values:
+                writer.add_scalars('valid', dict(name_value),valid_global_steps)
+        else:
+            writer.add_scalars('valid',dict(name_values),valid_global_steps)
+        writer_dict['valid_global_steps'] = valid_global_steps + 1
+
+    
     
         
 
