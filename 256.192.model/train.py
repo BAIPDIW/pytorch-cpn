@@ -347,7 +347,7 @@ if __name__ == '__main__':
                         help='number of data loading workers (default: 12)')
     parser.add_argument('-g', '--num_gpus', default=1, type=int, metavar='N',
                         help='number of GPU to use (default: 1)')    
-    parser.add_argument('--epochs', default=32, type=int, metavar='N',
+    parser.add_argument('--epochs', default=40, type=int, metavar='N',
                         help='number of total epochs to run (default: 32)')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
